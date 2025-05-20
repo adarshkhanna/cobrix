@@ -1098,7 +1098,7 @@ val df = spark
   
   // Specifies a mapping between segment ids and segment redefine fields
   .option("redefine_segment_id_map:1", "STATIC-DETAILS => C")
-  .option("redefine-segment-id-map:2", "CONTACTS => P")
+  .option("redefine_segment_id_map:2", "CONTACTS => P")
   
   // Specifies a parent-child relationship
   .option("segment-children:1", "STATIC-DETAILS => CONTACTS")
@@ -2315,3 +2315,107 @@ were generated randomly. Any resemblance to actual persons, companies or actual 
 ## See also
 Take a look at other COBOL-related open source projects. If you think a project belongs in the list, please let us know, we will add it.
 * [RCOBOLDI](https://github.com/thospfuller/rcoboldi) - R COBOL DI (Data Integration) Package: An R package that facilitates the importation of COBOL CopyBook data directly into the R Project for Statistical Computing as properly structured data frames. 
+
+---
+
+## COBOL Copybook Processing API
+
+This section describes the Spring Boot REST API for processing COBOL copybooks using Cobrix, with Google Cloud Storage (GCS) integration.
+
+### Endpoint
+
+-   **Method**: `POST`
+-   **Path**: `/api/v1/process-copybook`
+
+### Purpose
+
+The API processes a COBOL copybook. The location of the copybook and the desired output GCS path for the extracted field details (as JSON) are specified in a configuration JSON file, which itself is stored in GCS. The API call triggers the reading of this configuration, fetching the copybook, parsing it using Cobrix, extracting its schema, and writing this schema as a JSON file to the specified GCS output location.
+
+### Request Body
+
+The API expects a JSON request body specifying the GCS path to the configuration file.
+
+**Structure (referencing `com.example.cobolparser.dto.ApiRequest.java`):**
+
+```json
+{
+    "config": "gs://your-bucket/path/to/your-config.json"
+}
+```
+
+-   `config` (String, required): The full GCS path to the JSON configuration file.
+
+### GCS Configuration File (`config.json`)
+
+The `config` path provided in the API request must point to a JSON file stored in GCS. This file details the GCS path of the COBOL copybook to be processed and the GCS path where the resulting JSON schema should be stored.
+
+**Structure (referencing `com.example.cobolparser.dto.GcsConfig.java`):**
+
+```json
+{
+    "copybook": "gs://your-input-bucket/copybooks/my_copybook.cpy",
+    "outputJson": "gs://your-output-bucket/schemas/my_copybook_schema.json"
+}
+```
+
+-   `copybook` (String, required): The full GCS path to the COBOL copybook file (e.g., `.cpy`, `.cob`).
+-   `outputJson` (String, required): The full GCS path where the extracted JSON schema (field details) will be written.
+
+### Success Response
+
+Upon successful processing, the API returns an HTTP 200 OK status with a JSON response body.
+
+**Structure (referencing `com.example.cobolparser.dto.ApiResponse.java`):**
+
+```json
+{
+    "success": true,
+    "message": "Copybook processed successfully. Output available at GCS.",
+    "outputGcsPath": "gs://your-output-bucket/schemas/my_copybook_schema.json"
+}
+```
+
+-   `success` (boolean): Always `true` for successful operations.
+-   `message` (String): A confirmation message.
+-   `outputGcsPath` (String): The GCS path where the output JSON schema was written.
+
+### Error Response
+
+In case of an error, the API returns an appropriate HTTP error status code (e.g., 400, 404, 500) with a JSON response body.
+
+**Structure (referencing `com.example.cobolparser.dto.ApiResponse.java`):**
+
+```json
+{
+    "success": false,
+    "message": "Error message describing the issue."
+}
+```
+
+-   `success` (boolean): Always `false` for error responses.
+-   `message` (String): A message detailing the error. `outputGcsPath` will be null.
+
+Common error scenarios include:
+-   Invalid GCS path format.
+-   Missing or inaccessible GCS configuration file, copybook file.
+-   Malformed JSON in the configuration file.
+-   Errors during COBOL copybook parsing (e.g., syntax errors in the copybook).
+-   Permissions issues when reading from or writing to GCS.
+-   Unexpected server-side errors.
+
+### Running the Application
+
+The application is a Spring Boot application. It can be run using:
+
+```bash
+mvn spring-boot:run
+```
+
+Alternatively, you can run the `main` method in `com.example.cobolparser.Application.java` from your IDE.
+
+**Prerequisites for Running:**
+-   **Google Cloud Storage (GCS) Credentials**: The application uses Google Cloud Storage client libraries that rely on Application Default Credentials (ADC) for authentication. Ensure that the environment where the application is running is configured with appropriate credentials that have permissions to read from the GCS buckets specified for configuration and copybooks, and write to the GCS bucket specified for the output JSON. This typically involves:
+    -   Running on a Google Cloud Platform (GCP) service (like Compute Engine, GKE, Cloud Run) with appropriate service account permissions.
+    -   Or, for local development, authenticating via the `gcloud` CLI: `gcloud auth application-default login`.
+-   **Java Development Kit (JDK)**: Version 8 or higher (as per `pom.xml` configuration for `maven.compiler.source` and `maven.compiler.target`).
+-   **Apache Maven**: For building and running the application.
